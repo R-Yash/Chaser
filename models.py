@@ -9,3 +9,4 @@ class User(SQLModel, table=True):
     refresh_token: str
     token_expiry: datetime
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_synced_at: Optional[datetime] = None

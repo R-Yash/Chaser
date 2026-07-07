@@ -60,7 +60,7 @@ def sync_and_classify(user: User) -> None:
             if analysis["type"] in CLOSED_TYPES:
                 thread.status = "closed"
                 thread.last_message_at = datetime.utcnow()
-            elif not analysis["is_auto_reply"]:
+            elif not analysis["is_no_reply"]:
                 thread.status = "active"
                 thread.sequence_step = 0
                 thread.last_message_at = datetime.utcnow()

@@ -33,10 +33,13 @@ def extract_body(payload: dict) -> str:
 
 def parse_message(raw: dict) -> dict:
     headers = raw["payload"]["headers"]
+    label_ids = raw.get("labelIds", [])
     return {
         "gmail_id": raw["id"],
         "thread_id": raw["threadId"],
+        "direction": "out" if "SENT" in label_ids else "in",
         "from_addr": header(headers, "From"),
+        "to_addr": header(headers, "To"),
         "subject": header(headers, "Subject"),
         "message_id_header": header(headers, "Message-ID"),
         "date": header(headers, "Date"),
@@ -45,16 +48,16 @@ def parse_message(raw: dict) -> dict:
     }
 
 def fetch_new_messages(user: User) -> list[dict]:
-    serv = _service(user)
-
+    service = _service(user)
     since = user.last_synced_at or datetime.utcnow().replace(hour=0, minute=0, second=0)
-    query = f"after:{int(since.timestamp())} in:inbox"
+    
+    query = f"after:{int(since.timestamp())} (in:inbox OR in:sent)"
 
-    results = serv.users().messages().list(userId="me", q=query).execute()
+    results = service.users().messages().list(userId="me", q=query).execute()
     ids = [m["id"] for m in results.get("messages", [])]
-
+    
     messages = [
-        parse_message(serv.users().messages().get(userId="me", id=i, format="full").execute())
+        parse_message(service.users().messages().get(userId="me", id=i, format="full").execute())
         for i in ids
     ]
 

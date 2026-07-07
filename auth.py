@@ -49,7 +49,7 @@ def handle_callback(request, request_url: str) -> str:
     flow.fetch_token(authorization_response=request_url)
     creds = flow.credentials
 
-    claims = google_id_token.verify_oauth2_token(creds.id_token, GoogleRequest(), CLIENT_ID)
+    claims = google_id_token.verify_oauth2_token(creds.id_token, GoogleRequest(), CLIENT_ID,clock_skew_in_seconds=10)
     email = claims["email"]
 
     with get_session() as session:

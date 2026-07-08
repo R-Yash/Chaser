@@ -17,7 +17,7 @@ from api import router
 from models import User
 from scheduler import sync_and_classify, run_for_all_users
 
-FRONTEND_URL = "http://localhost:3000"
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 app = FastAPI()
 init_db()
@@ -32,7 +32,7 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=[FRONTEND_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,7 +41,11 @@ app.add_middleware(
 scheduler = BackgroundScheduler()
 scheduler.add_job(run_for_all_users, "interval", hours=1)
 scheduler.start()               
-                
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}             
+    
 @app.get("/")
 def home():
     return HTMLResponse('<a href="/login">Connect your Gmail</a>')

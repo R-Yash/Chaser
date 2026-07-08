@@ -52,6 +52,7 @@ def sync_and_classify(user: User) -> None:
                     role=analysis["role"],
                     contact_email=m["to_addr"] if m["direction"] == "out" else m["from_addr"],
                     last_type=analysis["type"],
+                    source="outreach" if analysis["type"] == "cold_outreach" else "job"
                 )
 
             thread.last_type = analysis["type"]

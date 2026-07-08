@@ -18,6 +18,7 @@ class Thread(SQLModel, table=True):
     company: Optional[str] = None
     role: Optional[str] = None
     contact_email: str
+    source: str = "job"
     last_type: str 
     status: str = "active" 
     sequence_step: int = 0

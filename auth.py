@@ -4,6 +4,7 @@ from google.oauth2.credentials import Credentials
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport.requests import Request as GoogleRequest
 from sqlmodel import select
+from fastapi import HTTPException, Request
 
 from db import get_session
 from models import User
@@ -29,6 +30,18 @@ def _flow(state=None, autogenerate_code_verifier=False):
     }
 
     return Flow.from_client_config(client_config, scopes=SCOPES, redirect_uri=REDIRECT_URI, state=state, autogenerate_code_verifier=autogenerate_code_verifier)
+
+def get_current_user(request: Request) -> User:
+    user_id = request.session.get("user_id")
+    print("raw cookie header:", request.headers.get("cookie"))
+    print("decoded session:", dict(request.session))
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    with get_session() as session:
+        user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
 
 def get_login_url(request) -> str:
     flow = _flow(autogenerate_code_verifier=True)
@@ -67,8 +80,10 @@ def handle_callback(request, request_url: str) -> str:
             user.token_expiry = creds.expiry
         session.add(user)
         session.commit()
+        session.refresh(user)
+        user_id = user.id
 
-    return email
+    return user_id
 
 def get_credentials(user: User) -> Credentials:
     creds = Credentials(

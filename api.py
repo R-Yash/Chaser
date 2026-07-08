@@ -2,19 +2,31 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 
 from db import get_session
-from models import Thread, User
+from models import Thread, User, Message
 from auth import get_current_user
 from scheduler import sync_and_classify
 
 router = APIRouter(prefix="/api")
 
 @router.get("/threads")
-def list_threads(source: str, user: User = Depends(get_current_user)):
+def list_threads(category: str, user: User = Depends(get_current_user)):
     with get_session() as session:
-        threads = session.exec(
-            select(Thread).where(Thread.user_id == user.id, Thread.source == source)
-        ).all()
-        return threads
+        query = select(Thread).where(Thread.user_id == user.id)
+        if category == "rejected":
+            query = query.where(Thread.last_type == "rejection")
+        else:
+            query = query.where(Thread.source == category, Thread.last_type != "rejection")
+            
+        query = query.order_by(Thread.last_message_at.desc())
+        threads = session.exec(query).all()
+
+        result = []
+        for t in threads:
+            latest = session.exec(
+                select(Message).where(Message.thread_id == t.id).order_by(Message.sent_at.desc())
+            ).first()
+            result.append({**t.model_dump(), "snippet": latest.snippet if latest else ""})
+        return result
     
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):

@@ -4,8 +4,9 @@ from sqlmodel import select
 
 from db import get_session
 from models import User, Thread, Message
-from gmail import fetch_new_messages
+from gmail import fetch_new_messages, send_email
 from llm import analyze_email
+from agent import draft_followup
 
 NUDGE_THRESHOLDS = {0: 5, 1: 9, 2: 16}
 CLOSED_TYPES = {"rejection", "offer"}
@@ -97,10 +98,44 @@ def decide_nudges(user: User) -> None:
                 session.add(t)
         session.commit()
 
+def send_nudges(user: User) -> None:
+    with get_session() as session:
+        threads = session.exec(
+            select(Thread).where(Thread.user_id == user.id, Thread.status == "needs_nudge")
+        ).all()
+
+    for t in threads:
+        try:
+            draft = draft_followup(t.id)
+            sent = send_email(
+                user,
+                to_addr=t.contact_email,
+                subject=f"Re: {t.role or t.company or 'following up'}",
+                body_text=draft,
+                thread_id=t.gmail_thread_id,
+            )
+        except Exception as e:
+            print(f"nudge failed for thread {t.id}: {e}")
+            continue
+
+        with get_session() as session:
+            db_thread = session.get(Thread, t.id)
+            db_thread.sequence_step += 1
+            db_thread.status = "active"
+            db_thread.last_message_at = datetime.utcnow()
+            session.add(db_thread)
+            session.add(Message(
+                thread_id=t.id,
+                gmail_message_id=sent["id"],
+                direction="out",
+                snippet=draft[:200],
+            ))
+            session.commit()
+
 def run_for_all_users() -> None:
     with get_session() as session:
         users = session.exec(select(User)).all()
-
     for user in users:
         sync_and_classify(user)
         decide_nudges(user)
+        send_nudges(user)

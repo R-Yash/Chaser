@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine, Session
 load_dotenv()
 
-engine = create_engine(os.getenv("DATABASE_URL"))
+engine = create_engine(os.getenv("DATABASE_URL"),pool_pre_ping=True, pool_recycle=300)
 
 def init_db():
     SQLModel.metadata.create_all(engine)

@@ -13,62 +13,66 @@ CLOSED_TYPES = {"rejection", "offer"}
 
 def sync_and_classify(user: User) -> None:
     for m in fetch_new_messages(user):
-        with get_session() as session:
-            already_seen = session.exec(select(Message).where(Message.gmail_message_id == m["gmail_id"])).first()
+        try:
+            with get_session() as session:
+                already_seen = session.exec(select(Message).where(Message.gmail_message_id == m["gmail_id"])).first()
 
-            if already_seen:
-                continue
+                if already_seen:
+                    continue
 
-            thread = session.exec(
-                select(Thread).where(
-                    Thread.user_id == user.id,
-                    Thread.gmail_thread_id == m["thread_id"],
+                thread = session.exec(
+                    select(Thread).where(
+                        Thread.user_id == user.id,
+                        Thread.gmail_thread_id == m["thread_id"],
+                    )
+                ).first()
+
+                if m["direction"] == "out" and thread is not None:
+                    thread.last_message_at = datetime.utcnow()
+                    session.add(thread)
+                    _log_message(session, thread, m)
+                    continue
+
+                analysis = analyze_email(
+                    m["subject"], m["body"], m["from_addr"],
+                    to_addr=m.get("to_addr"), direction=m["direction"],
                 )
-            ).first()
 
-            if m["direction"] == "out" and thread is not None:
-                thread.last_message_at = datetime.utcnow()
+                is_trackable = (
+                    analysis["type"] == "cold_outreach" if m["direction"] == "out"
+                    else analysis["type"] != "not_job_related"
+                )
+                if not is_trackable:
+                    continue
+
+                if thread is None:
+                    thread = Thread(
+                        user_id=user.id,
+                        gmail_thread_id=m["thread_id"],
+                        company=analysis["company"],
+                        role=analysis["role"],
+                        contact_email=m["to_addr"] if m["direction"] == "out" else m["from_addr"],
+                        last_type=analysis["type"],
+                        source="outreach" if analysis["type"] == "cold_outreach" else "job"
+                    )
+
+                thread.last_type = analysis["type"]
+                thread.company = thread.company or analysis["company"]
+                thread.role = thread.role or analysis["role"]
+
+                if analysis["type"] in CLOSED_TYPES:
+                    thread.status = "closed"
+                    thread.last_message_at = datetime.utcnow()
+                elif not analysis["is_no_reply"]:
+                    thread.status = "active"
+                    thread.sequence_step = 0
+                    thread.last_message_at = datetime.utcnow()
+
                 session.add(thread)
                 _log_message(session, thread, m)
-                continue
-
-            analysis = analyze_email(
-                m["subject"], m["body"], m["from_addr"],
-                to_addr=m.get("to_addr"), direction=m["direction"],
-            )
-
-            is_trackable = (
-                analysis["type"] == "cold_outreach" if m["direction"] == "out"
-                else analysis["type"] != "not_job_related"
-            )
-            if not is_trackable:
-                continue
-
-            if thread is None:
-                thread = Thread(
-                    user_id=user.id,
-                    gmail_thread_id=m["thread_id"],
-                    company=analysis["company"],
-                    role=analysis["role"],
-                    contact_email=m["to_addr"] if m["direction"] == "out" else m["from_addr"],
-                    last_type=analysis["type"],
-                    source="outreach" if analysis["type"] == "cold_outreach" else "job"
-                )
-
-            thread.last_type = analysis["type"]
-            thread.company = thread.company or analysis["company"]
-            thread.role = thread.role or analysis["role"]
-
-            if analysis["type"] in CLOSED_TYPES:
-                thread.status = "closed"
-                thread.last_message_at = datetime.utcnow()
-            elif not analysis["is_no_reply"]:
-                thread.status = "active"
-                thread.sequence_step = 0
-                thread.last_message_at = datetime.utcnow()
-
-            session.add(thread)
-            _log_message(session, thread, m)
+        except Exception as e:
+            print(f"sync failed for user {user.id}, message {m.get('gmail_id')}: {e}")
+            continue
 
 def _log_message(session, thread: Thread, m: dict) -> None:
     session.commit()
@@ -137,6 +141,17 @@ def run_for_all_users() -> None:
     with get_session() as session:
         users = session.exec(select(User)).all()
     for user in users:
-        sync_and_classify(user)
-        decide_nudges(user)
-        send_nudges(user)
+        try:
+            sync_and_classify(user)
+        except Exception as e:
+            print(f"sync_and_classify crashed for user {user.id}: {e}")
+
+        try:
+            decide_nudges(user)
+        except Exception as e:
+            print(f"decide_nudges crashed for user {user.id}: {e}")
+
+        try:
+            send_nudges(user)
+        except Exception as e:
+            print(f"send_nudges crashed for user {user.id}: {e}")

@@ -44,40 +44,27 @@ def make_token(user_id: int) -> str:
     sig = hmac.new(SESSION_SECRET, str(user_id).encode(), hashlib.sha256).hexdigest()
     return f"{user_id}.{sig}"
 
-# auth.py — temporary debug version of get_current_user
 def get_current_user(authorization: str | None = Header(default=None)) -> User:
-    print("raw authorization header:", repr(authorization))
-
     if not authorization or not authorization.startswith("Bearer "):
-        print("failed at: missing/malformed Bearer prefix")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     token = authorization.removeprefix("Bearer ")
     user_id_str, _, sig = token.partition(".")
-    print("parsed user_id_str:", repr(user_id_str), "| sig:", repr(sig))
 
     if not user_id_str.isdigit():
-        print("failed at: user_id_str is not digits")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     expected_sig = hmac.new(SESSION_SECRET, user_id_str.encode(), hashlib.sha256).hexdigest()
-    print("expected_sig:", expected_sig)
-    print("sigs match:", hmac.compare_digest(sig, expected_sig))
-
     if not hmac.compare_digest(sig, expected_sig):
-        print("failed at: signature mismatch")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     with get_session() as session:
         user = session.get(User, int(user_id_str))
     if not user:
-        print("failed at: no user row for id", user_id_str)
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
 def build_login() -> dict:
-    """Returns the Google auth URL plus the state/verifier the frontend must hold onto
-    (in short-lived cookies) until the callback comes back."""
     flow = _flow(autogenerate_code_verifier=True)
     url, state = flow.authorization_url(
         access_type="offline", prompt="consent", include_granted_scopes="true"
@@ -85,7 +72,6 @@ def build_login() -> dict:
     return {"url": url, "state": state, "code_verifier": flow.code_verifier}
 
 def exchange_code(code: str, state: str, code_verifier: str) -> int:
-    """Exchanges the OAuth code for tokens, upserts the User row, returns user.id."""
     flow = _flow(state=state, autogenerate_code_verifier=False)
     flow.code_verifier = code_verifier
     flow.fetch_token(code=code)

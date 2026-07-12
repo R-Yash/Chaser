@@ -67,8 +67,3 @@ def sync_inbox(user: User = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sync failed: {e}")
     return {"status": "ok"}
-
-@router.post("/debug/decide-nudges")
-def debug_decide_nudges(user: User = Depends(get_current_user)):
-    decide_nudges(user)
-    return {"status": "ran"}

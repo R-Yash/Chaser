@@ -9,3 +9,4 @@ wheels/
 uv.lock
 app.db
 
+TESTING.ipynb

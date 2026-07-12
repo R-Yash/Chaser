@@ -5,7 +5,7 @@ from sqlmodel import select
 from db import get_session
 from models import Thread, User, Message
 from auth import get_current_user, build_login, exchange_code, make_token
-from scheduler import sync_and_classify
+from scheduler import sync_and_classify, decide_nudges
 
 router = APIRouter(prefix="/api")
 
@@ -67,3 +67,8 @@ def sync_inbox(user: User = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sync failed: {e}")
     return {"status": "ok"}
+
+@router.post("/debug/decide-nudges")
+def debug_decide_nudges(user: User = Depends(get_current_user)):
+    decide_nudges(user)
+    return {"status": "ran"}

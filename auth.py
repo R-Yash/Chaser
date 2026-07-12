@@ -44,23 +44,34 @@ def make_token(user_id: int) -> str:
     sig = hmac.new(SESSION_SECRET, str(user_id).encode(), hashlib.sha256).hexdigest()
     return f"{user_id}.{sig}"
 
+# auth.py — temporary debug version of get_current_user
 def get_current_user(authorization: str | None = Header(default=None)) -> User:
+    print("raw authorization header:", repr(authorization))
+
     if not authorization or not authorization.startswith("Bearer "):
+        print("failed at: missing/malformed Bearer prefix")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     token = authorization.removeprefix("Bearer ")
     user_id_str, _, sig = token.partition(".")
+    print("parsed user_id_str:", repr(user_id_str), "| sig:", repr(sig))
 
     if not user_id_str.isdigit():
+        print("failed at: user_id_str is not digits")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     expected_sig = hmac.new(SESSION_SECRET, user_id_str.encode(), hashlib.sha256).hexdigest()
+    print("expected_sig:", expected_sig)
+    print("sigs match:", hmac.compare_digest(sig, expected_sig))
+
     if not hmac.compare_digest(sig, expected_sig):
+        print("failed at: signature mismatch")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     with get_session() as session:
         user = session.get(User, int(user_id_str))
     if not user:
+        print("failed at: no user row for id", user_id_str)
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 

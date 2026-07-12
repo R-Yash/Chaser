@@ -1,12 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlmodel import select
 
 from db import get_session
 from models import Thread, User, Message
-from auth import get_current_user
+from auth import get_current_user, build_login, exchange_code, make_token
 from scheduler import sync_and_classify
 
 router = APIRouter(prefix="/api")
+
+class ExchangeBody(BaseModel):
+    code: str
+    state: str
+    code_verifier: str
+
+@router.get("/auth/login-url")
+def login_url():
+    return build_login()
+
+@router.post("/auth/exchange")
+def auth_exchange(body: ExchangeBody):
+    user_id = exchange_code(body.code, body.state, body.code_verifier)
+    return {"token": make_token(user_id)}
 
 @router.get("/threads")
 def list_threads(category: str, user: User = Depends(get_current_user)):
@@ -16,7 +31,7 @@ def list_threads(category: str, user: User = Depends(get_current_user)):
             query = query.where(Thread.last_type == "rejection")
         else:
             query = query.where(Thread.source == category, Thread.last_type != "rejection")
-            
+
         query = query.order_by(Thread.last_message_at.desc())
         threads = session.exec(query).all()
 
@@ -27,7 +42,7 @@ def list_threads(category: str, user: User = Depends(get_current_user)):
             ).first()
             result.append({**t.model_dump(), "snippet": latest.snippet if latest else ""})
         return result
-    
+
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
     return {"email": user.email}

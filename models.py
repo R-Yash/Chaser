@@ -24,6 +24,8 @@ class Thread(SQLModel, table=True):
     sequence_step: int = 0
     last_message_at: datetime = Field(default_factory=datetime.utcnow)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    draft_nudge: str | None = None
+
 
 class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

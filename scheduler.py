@@ -99,43 +99,43 @@ def decide_nudges(user: User) -> None:
                 continue
             days_quiet = (datetime.utcnow() - t.last_message_at).days
             if days_quiet >= NUDGE_THRESHOLDS[t.sequence_step]:
-                t.status = "needs_nudge"
-                session.add(t)
+                try:
+                    t.draft_nudge = draft_followup(t.id)
+                    t.status = "needs_nudge"
+                    session.add(t)
+                except Exception as e:
+                    print(f"draft failed for thread {t.id}: {e}")
         session.commit()
 
-def send_nudges(user: User) -> None:
+def send_nudge(thread_id: int) -> None:
     with get_session() as session:
-        threads = session.exec(
-            select(Thread).where(Thread.user_id == user.id, Thread.status == "needs_nudge")
-        ).all()
+        t = session.get(Thread, thread_id)
+        if not t or t.status != "needs_nudge" or not t.draft_nudge:
+            raise ValueError("Thread not ready to nudge")
+        user = session.get(User, t.user_id)
 
-    for t in threads:
-        try:
-            draft = draft_followup(t.id)
-            sent = send_email(
-                user,
-                to_addr=t.contact_email,
-                subject=f"Re: {t.role or t.company or 'following up'}",
-                body_text=draft,
-                thread_id=t.gmail_thread_id,
-            )
-        except Exception as e:
-            print(f"nudge failed for thread {t.id}: {e}")
-            continue
+    sent = send_email(
+        user,
+        to_addr=t.contact_email,
+        subject=f"Re: {t.role or t.company or 'following up'}",
+        body_text=t.draft_nudge,
+        thread_id=t.gmail_thread_id,
+    )
 
-        with get_session() as session:
-            db_thread = session.get(Thread, t.id)
-            db_thread.sequence_step += 1
-            db_thread.status = "active"
-            db_thread.last_message_at = datetime.utcnow()
-            session.add(db_thread)
-            session.add(Message(
-                thread_id=t.id,
-                gmail_message_id=sent["id"],
-                direction="out",
-                snippet=draft[:200],
-            ))
-            session.commit()
+    with get_session() as session:
+        db_thread = session.get(Thread, thread_id)
+        db_thread.sequence_step += 1
+        db_thread.status = "active"
+        db_thread.last_message_at = datetime.utcnow()
+        db_thread.draft_nudge = None
+        session.add(db_thread)
+        session.add(Message(
+            thread_id=thread_id,
+            gmail_message_id=sent["id"],
+            direction="out",
+            snippet=t.draft_nudge[:200],
+        ))
+        session.commit()
 
 def run_for_all_users() -> None:
     with get_session() as session:
@@ -150,8 +150,3 @@ def run_for_all_users() -> None:
             decide_nudges(user)
         except Exception as e:
             print(f"decide_nudges crashed for user {user.id}: {e}")
-
-        try:
-            send_nudges(user)
-        except Exception as e:
-            print(f"send_nudges crashed for user {user.id}: {e}")

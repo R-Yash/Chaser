@@ -109,7 +109,7 @@ def decide_nudges(user: User) -> None:
                     print(f"draft failed for thread {t.id}: {e}")
         session.commit()
 
-def send_nudge(thread_id: int) -> None:
+def send_one_nudge(thread_id: int) -> None:
     with get_session() as session:
         t = session.get(Thread, thread_id)
         if not t or t.status != "needs_nudge" or not t.draft_nudge:

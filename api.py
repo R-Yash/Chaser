@@ -5,7 +5,7 @@ from sqlmodel import select
 from db import get_session
 from models import Thread, User, Message
 from auth import get_current_user, build_login, exchange_code, make_token
-from scheduler import sync_and_classify, decide_nudges
+from scheduler import sync_and_classify, decide_nudges, send_one_nudge
 
 router = APIRouter(prefix="/api")
 
@@ -49,7 +49,7 @@ def send_nudge(thread_id: int, user: User = Depends(get_current_user)):
         if not t or t.user_id != user.id:
             raise HTTPException(status_code=404, detail="Thread not found")
     try:
-        send_nudge(thread_id)
+        send_one_nudge(thread_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -15,7 +15,9 @@ def sync_and_classify(user: User) -> None:
     for m in fetch_new_messages(user):
         try:
             with get_session() as session:
-                already_seen = session.exec(select(Message).where(Message.gmail_message_id == m["gmail_id"])).first()
+                already_seen = session.exec(
+                    select(Message).where(Message.gmail_message_id == m["gmail_id"])
+                ).first()
 
                 if already_seen:
                     continue
@@ -53,7 +55,7 @@ def sync_and_classify(user: User) -> None:
                         role=analysis["role"],
                         contact_email=m["to_addr"] if m["direction"] == "out" else m["from_addr"],
                         last_type=analysis["type"],
-                        source="outreach" if analysis["type"] == "cold_outreach" else "job"
+                        source="outreach" if analysis["type"] == "cold_outreach" else "job",
                     )
 
                 thread.last_type = analysis["type"]
@@ -114,32 +116,36 @@ def send_nudge(thread_id: int) -> None:
             raise ValueError("Thread not ready to nudge")
         user = session.get(User, t.user_id)
 
-    sent = send_email(
-        user,
-        to_addr=t.contact_email,
-        subject=f"Re: {t.role or t.company or 'following up'}",
-        body_text=t.draft_nudge,
-        thread_id=t.gmail_thread_id,
-    )
+        to_addr = t.contact_email
+        subject = f"Re: {t.role or t.company or 'following up'}"
+        body_text = t.draft_nudge
+        gmail_thread_id = t.gmail_thread_id
 
-    with get_session() as session:
-        db_thread = session.get(Thread, thread_id)
-        db_thread.sequence_step += 1
-        db_thread.status = "active"
-        db_thread.last_message_at = datetime.utcnow()
-        db_thread.draft_nudge = None
-        session.add(db_thread)
+        sent = send_email(
+            user,
+            to_addr=to_addr,
+            subject=subject,
+            body_text=body_text,
+            thread_id=gmail_thread_id,
+        )
+
+        t.sequence_step += 1
+        t.status = "active"
+        t.last_message_at = datetime.utcnow()
+        t.draft_nudge = None
+        session.add(t)
         session.add(Message(
             thread_id=thread_id,
             gmail_message_id=sent["id"],
             direction="out",
-            snippet=t.draft_nudge[:200],
+            snippet=body_text[:200],
         ))
         session.commit()
 
 def run_for_all_users() -> None:
     with get_session() as session:
         users = session.exec(select(User)).all()
+
     for user in users:
         try:
             sync_and_classify(user)

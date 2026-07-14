@@ -52,6 +52,7 @@ def sync_and_classify(user: User) -> None:
                         gmail_thread_id=m["thread_id"],
                         company=analysis["company"],
                         role=analysis["role"],
+                        contact_name=analysis["contact_name"],
                         contact_email=m["to_addr"] if m["direction"] == "out" else m["from_addr"],
                         last_type=analysis["type"],
                         source="outreach" if analysis["type"] == "cold_outreach" else "job",
@@ -60,6 +61,7 @@ def sync_and_classify(user: User) -> None:
                 thread.last_type = analysis["type"]
                 thread.company = thread.company or analysis["company"]
                 thread.role = thread.role or analysis["role"]
+                thread.contact_name = thread.contact_name or analysis["contact_name"]
 
                 if analysis["type"] in CLOSED_TYPES:
                     thread.status = "closed"

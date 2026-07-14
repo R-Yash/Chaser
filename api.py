@@ -36,10 +36,14 @@ def list_threads(category: str, user: User = Depends(get_current_user)):
 
         result = []
         for t in threads:
-            latest = session.exec(
+            msgs = session.exec(
                 select(Message).where(Message.thread_id == t.id).order_by(Message.sent_at.desc())
-            ).first()
-            result.append({**t.model_dump(), "snippet": latest.snippet if latest else ""})
+            ).all()
+            result.append({
+                **t.model_dump(),
+                "snippet": msgs[0].snippet if msgs else "",
+                "message_count": len(msgs),
+            })
         return result
 
 class SendNudgeBody(BaseModel):

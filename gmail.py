@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
 load_dotenv()
@@ -49,7 +49,7 @@ def parse_message(raw: dict) -> dict:
 
 def fetch_new_messages(user: User) -> list[dict]:
     service = _service(user)
-    since = user.last_synced_at or datetime.utcnow().replace(hour=0, minute=0, second=0)
+    since = user.last_synced_at or (datetime.utcnow() - timedelta(days=7))
     
     query = f"after:{int(since.timestamp())} (in:inbox OR in:sent)"
 

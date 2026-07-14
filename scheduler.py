@@ -1,4 +1,3 @@
-# scheduler.py
 from datetime import datetime
 from sqlmodel import select
 
@@ -109,7 +108,7 @@ def decide_nudges(user: User) -> None:
                     print(f"draft failed for thread {t.id}: {e}")
         session.commit()
 
-def send_one_nudge(thread_id: int) -> None:
+def send_one_nudge(thread_id: int, edited_text: str | None = None) -> None:
     with get_session() as session:
         t = session.get(Thread, thread_id)
         if not t or t.status != "needs_nudge" or not t.draft_nudge:
@@ -118,7 +117,7 @@ def send_one_nudge(thread_id: int) -> None:
 
         to_addr = t.contact_email
         subject = f"Re: {t.role or t.company or 'following up'}"
-        body_text = t.draft_nudge
+        body_text = edited_text if edited_text else t.draft_nudge
         gmail_thread_id = t.gmail_thread_id
 
         sent = send_email(

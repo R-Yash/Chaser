@@ -17,6 +17,7 @@ class Thread(SQLModel, table=True):
     gmail_thread_id: str = Field(index=True)
     company: Optional[str] = None
     role: Optional[str] = None
+    contact_name: Optional[str] = None
     contact_email: str
     source: str = "job"
     last_type: str 
@@ -25,7 +26,6 @@ class Thread(SQLModel, table=True):
     last_message_at: datetime = Field(default_factory=datetime.utcnow)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     draft_nudge: str | None = None
-
 
 class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -1,4 +1,3 @@
-# scheduler.py
 from datetime import datetime
 from sqlmodel import select
 
@@ -53,6 +52,7 @@ def sync_and_classify(user: User) -> None:
                         gmail_thread_id=m["thread_id"],
                         company=analysis["company"],
                         role=analysis["role"],
+                        contact_name=analysis["contact_name"],
                         contact_email=m["to_addr"] if m["direction"] == "out" else m["from_addr"],
                         last_type=analysis["type"],
                         source="outreach" if analysis["type"] == "cold_outreach" else "job",
@@ -61,6 +61,7 @@ def sync_and_classify(user: User) -> None:
                 thread.last_type = analysis["type"]
                 thread.company = thread.company or analysis["company"]
                 thread.role = thread.role or analysis["role"]
+                thread.contact_name = thread.contact_name or analysis["contact_name"]
 
                 if analysis["type"] in CLOSED_TYPES:
                     thread.status = "closed"
@@ -109,7 +110,7 @@ def decide_nudges(user: User) -> None:
                     print(f"draft failed for thread {t.id}: {e}")
         session.commit()
 
-def send_one_nudge(thread_id: int) -> None:
+def send_one_nudge(thread_id: int, edited_text: str | None = None) -> None:
     with get_session() as session:
         t = session.get(Thread, thread_id)
         if not t or t.status != "needs_nudge" or not t.draft_nudge:
@@ -118,7 +119,7 @@ def send_one_nudge(thread_id: int) -> None:
 
         to_addr = t.contact_email
         subject = f"Re: {t.role or t.company or 'following up'}"
-        body_text = t.draft_nudge
+        body_text = edited_text if edited_text else t.draft_nudge
         gmail_thread_id = t.gmail_thread_id
 
         sent = send_email(

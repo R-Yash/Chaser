@@ -36,20 +36,27 @@ def list_threads(category: str, user: User = Depends(get_current_user)):
 
         result = []
         for t in threads:
-            latest = session.exec(
+            msgs = session.exec(
                 select(Message).where(Message.thread_id == t.id).order_by(Message.sent_at.desc())
-            ).first()
-            result.append({**t.model_dump(), "snippet": latest.snippet if latest else ""})
+            ).all()
+            result.append({
+                **t.model_dump(),
+                "snippet": msgs[0].snippet if msgs else "",
+                "message_count": len(msgs),
+            })
         return result
 
+class SendNudgeBody(BaseModel):
+    text: str | None = None
+
 @router.post("/threads/{thread_id}/send-nudge")
-def send_nudge(thread_id: int, user: User = Depends(get_current_user)):
+def send_nudge(thread_id: int, body: SendNudgeBody = SendNudgeBody(), user: User = Depends(get_current_user)):
     with get_session() as session:
         t = session.get(Thread, thread_id)
         if not t or t.user_id != user.id:
             raise HTTPException(status_code=404, detail="Thread not found")
     try:
-        send_one_nudge(thread_id)
+        send_one_nudge(thread_id, body.text)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

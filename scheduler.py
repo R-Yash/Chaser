@@ -1,5 +1,6 @@
+# scheduler.py
 from datetime import datetime
-from sqlmodel import select
+from sqlmodel import select, func
 
 from db import get_session
 from models import User, Thread, Message
@@ -45,6 +46,18 @@ def sync_and_classify(user: User) -> None:
                 )
                 if not is_trackable:
                     continue
+
+                if thread is None and analysis["type"] in CLOSED_TYPES and analysis["company"]:
+                    thread = session.exec(
+                        select(Thread).where(
+                            Thread.user_id == user.id,
+                            Thread.source == "job",
+                            Thread.status != "closed",
+                            func.lower(Thread.company) == analysis["company"].lower(),
+                        )
+                    ).first()
+                    if thread:
+                        thread.gmail_thread_id = m["thread_id"]
 
                 if thread is None:
                     thread = Thread(

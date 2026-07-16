@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from datetime import datetime
 import os
 load_dotenv()
 
@@ -26,7 +27,7 @@ app.add_middleware(
 )
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(run_for_all_users, "interval", hours=1)
+scheduler.add_job(run_for_all_users, "interval", hours=1, next_run_time=datetime.now())
 scheduler.start()
 
 @app.get("/healthz")

@@ -1,9 +1,8 @@
-import os
 from sqlmodel import select
 from google import genai
 
 from db import get_session
-from models import Thread, Message
+from models import Thread, Message, VoiceExample
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -33,16 +32,17 @@ def load_thread_context(thread_id: int) -> str:
         f"Message history:\n{history}"
     )
 
-def get_voice_examples() -> str:
-    path = os.path.join(os.path.dirname(__file__), "voice_examples.txt")
-    if not os.path.exists(path):
-        return ""
-    with open(path) as f:
-        return f.read()
-
+def get_voice_examples(user_id: int) -> str:
+    with get_session() as session:
+        examples = session.exec(
+            select(VoiceExample).where(VoiceExample.user_id == user_id).order_by(VoiceExample.created_at)
+        ).all()
+    return "\n\n---\n\n".join(e.content for e in examples)
 
 def draft_followup(thread_id: int) -> str:
     context = load_thread_context(thread_id)
+    with get_session() as session:
+        user_id = session.get(Thread, thread_id).user_id
 
     interaction = client.interactions.create(
         model=MODEL,
@@ -56,10 +56,10 @@ def draft_followup(thread_id: int) -> str:
         tools=[{"type": "google_search"}],
     )
 
-    return critique_and_revise(_extract_text(interaction))
+    return critique_and_revise(_extract_text(interaction), user_id)
 
-def critique_and_revise(draft: str) -> str:
-    examples = get_voice_examples()
+def critique_and_revise(draft: str, user_id: int) -> str:
+    examples = get_voice_examples(user_id)
     if not examples:
         return draft 
 

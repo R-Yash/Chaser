@@ -109,6 +109,8 @@ def decide_nudges(user: User) -> None:
         ).all()
 
         for t in threads:
+            if t.snoozed_until and t.snoozed_until > datetime.utcnow():
+                continue
             if t.sequence_step > max_step:
                 t.status = "stale"
                 session.add(t)

@@ -9,6 +9,7 @@ def init_db():
     SQLModel.metadata.create_all(engine)
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE thread ADD COLUMN IF NOT EXISTS contact_name VARCHAR"))
+        conn.execute(text("ALTER TABLE thread ADD COLUMN IF NOT EXISTS snoozed_until TIMESTAMP"))
         conn.commit()
 
 def get_session():

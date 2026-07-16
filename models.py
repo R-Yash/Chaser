@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
 from sqlmodel import SQLModel, Field
+from pydantic import BaseModel
 
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -27,6 +27,7 @@ class Thread(SQLModel, table=True):
     last_message_at: datetime = Field(default_factory=datetime.utcnow)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     draft_nudge: str | None = None
+    snoozed_until: Optional[datetime] = None
 
 class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -35,6 +36,15 @@ class Message(SQLModel, table=True):
     direction: str  
     snippet: str
     sent_at: datetime = Field(default_factory=datetime.utcnow)
+
+class VoiceExample(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    content: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class VoiceExampleBody(BaseModel):
+    content: str
 
 class UpdateThreadBody(BaseModel):
     company: str
@@ -45,8 +55,13 @@ class UpdateThreadBody(BaseModel):
     created_at: datetime
     last_message_at: datetime
 
-class VoiceExample(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", index=True)
-    content: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+class SendNudgeBody(BaseModel):
+    text: str | None = None
+    
+class ExchangeBody(BaseModel):
+    code: str
+    state: str
+    code_verifier: str
+
+class SnoozeBody(BaseModel):
+    days: int

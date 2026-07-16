@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import select
 
 from db import get_session
-from models import Thread, User, Message, VoiceExample
+from models import Thread, User, Message, VoiceExample, ExchangeBody, SnoozeBody, UpdateThreadBody, SendNudgeBody, VoiceExampleBody
 from auth import get_current_user, build_login, exchange_code, make_token
 from scheduler import sync_and_classify, decide_nudges, send_one_nudge, CLOSED_TYPES
 
@@ -13,11 +13,6 @@ MAX_VOICE_EXAMPLES = 15
 MAX_VOICE_EXAMPLE_LEN = 8000
 
 router = APIRouter(prefix="/api")
-
-class ExchangeBody(BaseModel):
-    code: str
-    state: str
-    code_verifier: str
 
 @router.get("/auth/login-url")
 def login_url():
@@ -51,9 +46,6 @@ def list_threads(category: str, user: User = Depends(get_current_user)):
             })
         return result
 
-class SendNudgeBody(BaseModel):
-    text: str | None = None
-
 @router.post("/threads/{thread_id}/send-nudge")
 def send_nudge(thread_id: int, body: SendNudgeBody = SendNudgeBody(), user: User = Depends(get_current_user)):
     with get_session() as session:
@@ -68,14 +60,20 @@ def send_nudge(thread_id: int, body: SendNudgeBody = SendNudgeBody(), user: User
         raise HTTPException(status_code=500, detail=f"Send failed: {e}")
     return {"status": "sent"}
 
-class UpdateThreadBody(BaseModel):
-    company: str
-    role: str
-    contact_name: str
-    contact_email: str
-    last_type: str
-    created_at: datetime
-    last_message_at: datetime
+@router.post("/threads/{thread_id}/snooze")
+def snooze_thread(thread_id: int, body: SnoozeBody, user: User = Depends(get_current_user)):
+    if body.days <= 0:
+        raise HTTPException(status_code=400, detail="Days must be positive")
+    with get_session() as session:
+        t = session.get(Thread, thread_id)
+        if not t or t.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        t.snoozed_until = datetime.utcnow() + timedelta(days=body.days)
+        t.status = "active"
+        t.draft_nudge = None
+        session.add(t)
+        session.commit()
+    return {"status": "ok"}
 
 @router.patch("/threads/{thread_id}")
 def update_thread(thread_id: int, body: UpdateThreadBody, user: User = Depends(get_current_user)):
@@ -102,9 +100,6 @@ def update_thread(thread_id: int, body: UpdateThreadBody, user: User = Depends(g
         session.add(t)
         session.commit()
     return {"status": "ok"}
-
-class VoiceExampleBody(BaseModel):
-    content: str
 
 @router.get("/voice-examples")
 def list_voice_examples(user: User = Depends(get_current_user)):
